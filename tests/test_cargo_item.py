@@ -1,8 +1,9 @@
+import json
 import re
 
 import pytest
 
-from cargo_item import CargoItem
+from cargo_item import CargoDirectory, CargoItem
 
 
 def make_item(**overrides):
@@ -138,3 +139,85 @@ def test_track_validates_inputs():
 
     with pytest.raises(TypeError):
         item.track([])
+
+
+def test_get_returns_serialized_snapshot():
+    item = make_item()
+
+    snapshot = json.loads(item.get())
+
+    assert snapshot["id"] == item.trackingId()
+    assert snapshot["sendernam"] == "Nehir"
+    assert snapshot["deleted"] is False
+
+
+def test_update_changes_fields_and_notifies_trackers():
+    item = make_item()
+    tracker = TrackerWithArg()
+    item.track(tracker)
+
+    item.update(sendernam="Updated Sender")
+
+    assert item.sender_name == "Updated Sender"
+    assert tracker.calls[-1] is item
+
+
+def test_update_rejects_unknown_fields():
+    item = make_item()
+
+    with pytest.raises(AttributeError):
+        item.update(foo="bar")
+
+
+def test_delete_marks_item_and_blocks_future_changes():
+    item = make_item()
+    item.delete()
+
+    assert item.state == "deleted"
+    assert item.getContainer() is None
+    with pytest.raises(RuntimeError):
+        item.update(sendernam="Another")
+
+
+def test_directory_create_list_attach_detach_delete_flow():
+    directory = CargoDirectory()
+    item_id = directory.create(
+        sendernam="S",
+        recipnam="R",
+        recipaddr="Addr",
+        owner="Owner",
+    )
+
+    listed = dict(directory.list())
+    assert item_id in listed
+
+    item = directory.attach(item_id, "user1")
+    assert isinstance(item, CargoItem)
+
+    attached = dict(directory.listattached("user1"))
+    assert item_id in attached
+
+    directory.detach(item_id, "user1")
+    assert directory.listattached("user1") == []
+
+    directory.delete(item_id)
+    assert directory.list() == []
+
+
+def test_directory_delete_requires_detach_first():
+    directory = CargoDirectory()
+    item_id = directory.create(
+        sendernam="S",
+        recipnam="R",
+        recipaddr="Addr",
+        owner="Owner",
+    )
+    directory.attach(item_id, "user1")
+
+    with pytest.raises(RuntimeError):
+        directory.delete(item_id)
+
+    directory.detach(item_id, "user1")
+    directory.delete(item_id)
+
+    assert directory.list() == []

@@ -1,15 +1,26 @@
-"""Cargo item model for the cargo delivery and tracking system."""
+"""Cargo item model and in-memory directory for the cargo tracking system."""
 
 from __future__ import annotations
 
+import json
 from itertools import count
-from typing import Any, Optional
+from typing import Any, Dict, List, Optional, Tuple
 
 
 class CargoItem:
     """Represents a single cargo item and its tracking state."""
 
     _id_sequence = count(1)
+    _allowed_update_fields = {
+        "sendernam": "sender_name",
+        "sender_name": "sender_name",
+        "recipnam": "recipient_name",
+        "recipient_name": "recipient_name",
+        "recipaddr": "recipient_address",
+        "recipient_address": "recipient_address",
+        "owner": "owner",
+        "state": "state",
+    }
 
     def __init__(
         self,
@@ -37,6 +48,25 @@ class CargoItem:
         self._container: Any = None
         self._container_id: Optional[Any] = None
         self._trackers: set[Any] = set()
+        self._deleted = False
+
+    def get(self) -> str:
+        """Return a JSON representation of the cargo item."""
+        payload = {
+            "id": self._tracking_id,
+            "sendernam": self.sender_name,
+            "recipnam": self.recipient_name,
+            "recipaddr": self.recipient_address,
+            "owner": self.owner,
+            "state": self.state,
+            "container": self._container_id,
+            "deleted": self._deleted,
+        }
+        return json.dumps(payload, sort_keys=True)
+
+    def getid(self) -> str:
+        """Return the unique identifier allotted by the directory."""
+        return self._tracking_id
 
     def trackingId(self) -> str:
         return self._tracking_id
@@ -45,6 +75,7 @@ class CargoItem:
         return self._container_id
 
     def setContainer(self, container: Any) -> None:
+        self._ensure_active()
         self._container = container
         self._container_id = self._resolve_container_id(container)
 
@@ -59,15 +90,40 @@ class CargoItem:
 
         self.updated()
 
+    def update(self, **updates: Any) -> None:
+        """Update mutable fields of the cargo item."""
+        if not updates:
+            return
+
+        self._ensure_active()
+
+        changed = False
+        for key, value in updates.items():
+            attr = self._allowed_update_fields.get(key)
+            if attr is None:
+                raise AttributeError(f"Unknown field '{key}'")
+            if value is None or (isinstance(value, str) and not value.strip()):
+                raise ValueError(f"Invalid value for '{key}'")
+
+            current = getattr(self, attr)
+            if current != value:
+                setattr(self, attr, value)
+                changed = True
+
+        if changed:
+            self.updated()
+
     def updated(self) -> None:
         for tracker in list(self._trackers):
             self._notify_tracker(tracker)
 
     def complete(self) -> None:
+        self._ensure_active()
         self.state = "complete"
         self.updated()
 
     def track(self, tracker: Any) -> None:
+        self._ensure_active()
         if tracker is None:
             raise ValueError("tracker must not be None")
         try:
@@ -76,7 +132,19 @@ class CargoItem:
             raise TypeError("tracker objects not hashable") from exc
 
     def untrack(self, tracker: Any) -> None:
+        self._ensure_active()
         self._trackers.discard(tracker)
+
+    def delete(self) -> None:
+        """Mark the cargo item as deleted and notify trackers."""
+        if self._deleted:
+            return
+        self._deleted = True
+        self.state = "deleted"
+        self._container = None
+        self._container_id = None
+        self.updated()
+        self._trackers.clear()
 
     def _notify_tracker(self, tracker: Any) -> None:
         try:
@@ -108,3 +176,70 @@ class CargoItem:
             if isinstance(state, str) and state:
                 return state
         return None
+
+    def _ensure_active(self) -> None:
+        if self._deleted:
+            raise RuntimeError("Cargo item has been deleted")
+
+
+class CargoDirectory:
+    """In-memory catalog for cargo items supporting CRUD operations."""
+
+    def __init__(self) -> None:
+        self._items: Dict[str, CargoItem] = {}
+        self._attachments: Dict[str, set[str]] = {}
+
+    def create(self, **kwargs: Any) -> str:
+        item = CargoItem(**kwargs)
+        item_id = item.getid()
+        if item_id in self._items:
+            raise RuntimeError("Duplicate cargo item identifier generated")
+        self._items[item_id] = item
+        return item_id
+
+    def list(self) -> List[Tuple[str, str]]:
+        return [(item_id, item.get()) for item_id, item in self._items.items()]
+
+    def listattached(self, user: str) -> List[Tuple[str, str]]:
+        self._ensure_valid_user(user)
+        result: List[Tuple[str, str]] = []
+        for item_id, users in self._attachments.items():
+            if user in users and item_id in self._items:
+                result.append((item_id, self._items[item_id].get()))
+        return result
+
+    def attach(self, item_id: str, user: str) -> CargoItem:
+        item = self._require_item(item_id)
+        self._ensure_valid_user(user)
+        self._attachments.setdefault(item_id, set()).add(user)
+        return item
+
+    def detach(self, item_id: str, user: str) -> None:
+        self._ensure_valid_user(user)
+        if item_id not in self._items:
+            raise KeyError(item_id)
+        users = self._attachments.get(item_id)
+        if not users or user not in users:
+            raise KeyError(f"User '{user}' not attached to item '{item_id}'")
+        users.remove(user)
+        if not users:
+            self._attachments.pop(item_id, None)
+
+    def delete(self, item_id: str) -> None:
+        item = self._require_item(item_id)
+        attached = self._attachments.get(item_id)
+        if attached:
+            raise RuntimeError("Cannot delete an item while it is attached")
+        item.delete()
+        self._items.pop(item_id, None)
+
+    def _require_item(self, item_id: str) -> CargoItem:
+        try:
+            return self._items[item_id]
+        except KeyError as exc:
+            raise KeyError(f"Unknown item '{item_id}'") from exc
+
+    @staticmethod
+    def _ensure_valid_user(user: str) -> None:
+        if not isinstance(user, str) or not user.strip():
+            raise ValueError("user must be a non-empty string")
