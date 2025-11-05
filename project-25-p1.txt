@@ -1,0 +1,171 @@
+CEng 445 Spring 2023 Project Class Interface
+Project Phases Description
+In this first phase, you are going to implement a class library and its unit
+tests in Python. The phases of the project will be:
+1. Class library
+2. TCP service
+3. Web service
+4. Dynamic web application
+There will be no persistence (i.e., objects saved to a database); everything
+will be in memory. Additionally, there will be no concurrent access.
+In the second phase, you will implement concurrency, persistence, and make
+your application remotely accessible via a text-based TCP protocol.
+In the third phase, you will convert your class library into a web service. A
+simple web frontend can be used to control your application. You will revise
+your unit tests to call operations over the web.
+In the fourth phase, your application will use websockets to implement server
+push notifications and a better visualization of the objects in the application.
+
+Generic Class Library
+The following class descriptions may not be final and may not be the best way
+to implement the projects. You can modify the arguments or add new methods,
+as long as you can justify your changes.
+In the projects, the abbreviation CRUD implies the implementation of the
+following methods:
+Method Description
+constructor(...) Create a new instance of the class from arguments.
+get() Read. Return a textual representation of the item.
+You can use a JSON-like representation or simply
+records separated by punctuation (e.g., CSV).
+update(**kw) Update. Update the current item with new values.
+Updated parameters are given as keyword
+arguments. Other parameters remain the same.
+delete() Delete. Delete the item.
+
+In all projects, we need a catalog of current objects, which will also let us
+create new instances globally as a factory. In the following phases, clients
+can query and observe the objects in this central class or singleton object.
+You can call it Directory, Repo, or a name most suitable for the specific
+project topic.
+
+Method Description
+create(**kw) Creates a new editable object, assigns a unique
+id, and returns the id.
+list() Return a list (or iterator) of (id, description)
+pairs for editable objects.
+listattached(user) Lists the objects that the user has attached.
+attach(id, user) Returns the object with the given id from the
+Repo. The object is marked as in use as long as
+it is kept attached by any user.
+detach(id, user) The user detaches the object or stops editing and
+watching it. When the last user detaches it, the
+object will be in a not in use state.
+delete(id) The user deletes the object. All users should
+detach the object before deletion.
+
+In a typical scenario, a client (user of the library) will list the set of
+objects, attach to an object to get the actual Python object by its id, call
+methods on it, and detach from it when done. There is no concurrency in the
+first phase, but in the following phases, the same object can be attached by
+multiple connections.
+
+For the first phase, persistence is not required. When implemented, the
+object will be loaded into memory when the first user attaches to it and
+saved to disk/database when the last user detaches from it. Each constructed
+object will be assigned a unique id by create(), and calling the getid(...)
+method on the object returns it.
+
+The project topics are chosen to contain instance notification scenarios. When
+an object is updated, all observers will get an immediate notification. In the
+first phase, you can show this case with terminal output. In the second phase,
+all attached clients will be notified properly.
+
+Also, you do not need to implement any persistence in this phase. All objects
+are lost when the program stops.
+
+Project Topics (cargo-only copy)
+
+4. Cargo Delivery and Tracking System
+CargoItem class
+CargoItem class has the following methods:
+Method Description
+constructor(sendernam,
+recipnam, recipaddr,
+owner)
+Create a new cargo item. The item is assigned a
+unique tracking id; the state is set to accepted.
+trackingId() Returns the tracking id of the item.
+
+Method Description
+getContainer() Returns the id of the container that the item is
+inside. If not loaded in a container yet, returns
+None.
+setContainer(container) Updates the container of the item.
+updated() Called when the status of the item changes: new
+container is set, the container updates its position,
+or the state changes.
+complete() Called once the cargo is delivered to the recipient;
+the state is set to complete.
+track(tracker) Adds the tracker object to the tracker list so that
+updates of the item are sent to the tracker.
+untrack(tracker) Removes the tracker object from the tracker list.
+
+Container class
+A Container class can be stationary, like a cargo office or a hub (airport, depot,
+etc.). You can derive different behaviors as subclasses. FrontOffice and Hub
+subclasses can serve as stationary containers; when an item is inserted, its state
+will be waiting. Otherwise, the state will be in transit.
+Method Description
+constructor(cid,
+description, type,
+loc)
+Create an empty container.
+setlocation(long,
+latt)
+Sets the new location of the container.
+getState() Cargo items contained in this container call this
+function to get the state as waiting or in
+transit.
+move(itemlist,
+newcontainer)
+The items in the list are dropped from the current
+object and inserted into the new container.
+load(itemlist) The items in the list are inserted into the current
+object.
+unload(itemlist) The items in the list are removed from the current
+object.
+track(tracker) Adds the tracker object to the tracker list so that
+updates in the container are sent to the tracker.
+untrack(tracker) Removes the tracker object from the tracker list.
+
+Tracker class
+The Tracker class is used to track a set of CargoItems. A user can construct
+and modify a tracker object in order to be notified of state changes. The tracker
+may track cargo items as well as containers.
+Method Description
+constructor(tid,
+description, owner)
+Create a new tracker with no tracking items or
+containers.
+addItem(itemlist) Adds a list of cargo items to track.
+addContainer(contlist) Adds a list of containers to track.
+updated() Is called by tracked objects to inform that the
+model has been changed.
+getStatlist() Returns a list of states for the tracked items,
+including their locations.
+setView(top, left,
+bottom, right)
+The tracker generates reports for all tracked
+objects by default. This call restricts the report to
+the rectangle defined by the parameters. Status
+changes of objects out of this rectangle are
+ignored. Also, getStatList returns only objects
+with a location contained in the rectangle.
+
+Unit Testing
+You will implement unit testing scripts in addition to the class library. Tests
+will cover all method calls you implement. You will show the result and imple-
+mentation of unit tests during the demo. You will use pytest module for unit
+tests. More information will be provided in the class.
+
+Policies
+Any kind of code sharing among the teams is not allowed. You will get zero from
+the phase involving cheating. During the demo, both team members will be
+asked detailed questions about the code. If you fail to answer the questions, we
+will assume the code is not your work and cut your points. You have to show
+that you have the full control of your code.
+
+Submission
+You will submit all your files in an archive file on odtuclass. The demonstrations
+will be scheduled in the following days where you need to demonstrate the
+submitted files, no further contribution allowed.
