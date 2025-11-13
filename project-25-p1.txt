@@ -1,20 +1,4 @@
 CEng 445 Spring 2023 Project Class Interface
-Project Phases Description
-In this first phase, you are going to implement a class library and its unit
-tests in Python. The phases of the project will be:
-1. Class library
-2. TCP service
-3. Web service
-4. Dynamic web application
-There will be no persistence (i.e., objects saved to a database); everything
-will be in memory. Additionally, there will be no concurrent access.
-In the second phase, you will implement concurrency, persistence, and make
-your application remotely accessible via a text-based TCP protocol.
-In the third phase, you will convert your class library into a web service. A
-simple web frontend can be used to control your application. You will revise
-your unit tests to call operations over the web.
-In the fourth phase, your application will use websockets to implement server
-push notifications and a better visualization of the objects in the application.
 
 Generic Class Library
 The following class descriptions may not be final and may not be the best way

@@ -14,47 +14,6 @@ B. General CRUD (10 points)
     * delete() - 5
 
 C. Project-Specific Implementations (25 points)
-Project 1: Text Editor
-* Document Class(25 points):
-    * importJson(jsonstr) - 4
-    * __getitem__(path), __setitem__(path, markup), __del__(path), insert(path, document) - 11
-    * getid(idstr) - 2
-    * search(text) - 2
-    * parent() - 2
-    * draw()/html() - 2
-    * json() - 2
-
-Project 2: Sports Monitor
-* Team Class (2 points)
-    * __setitem__(key, value), __getattr__(key), __delattr__(key) - 1
-    * addplayer(name, no), delplayer(name) - 1
-* Game Class (8 points)
-    * id(), home(), away() properties - 1
-    * start(), pause(), resume(), end() - 1
-    * score(points, team, player) - 1
-    * stats() - 5
-* Cup Class (9 points)
-    * search(tname, group, between) - 4
-    * __getitem__(gameid) - 1
-    * gametree() - 1
-    * standing() - 3
-* each individual game type logics were implemented correctly - (6 points)
-
-Project 3: Trading Monitor
-* Asset Class (5 points)
-    * update(sell, buy) - 2
-    * values(seconds, end) - 3
-* Statistics Classes (10 points)
-    [] MovingAverage(a, t) - 2.5
-    [] StdDev(a, t) - 2.5
-    [] Correlation(a1, a2, t) - 2.5
-    [] Beta(a, t) - 2.5
-* Implementation of Signal Classes & Factory (10 points)
-    [] Threshold(a, selval, buyval) - 2
-    [] Cross(a1, a2) - 2
-    [] RSI(a, t) - 2
-    [] BollingerBand(a, t) - 2
-    [] Factory pattern (createSignal, createStat) - 2
 
 Project 4: Cargo System
 * CargoItem Class (6 points)

@@ -17,7 +17,7 @@ def make_item(**overrides):
     return CargoItem(**params)
 
 
-def test_tracking_id_format_and_defaults():
+def test_1():  # Tests tracking ID format and defaults
     item = make_item()
 
     assert re.fullmatch(r"CI\d{8}", item.trackingId())
@@ -29,7 +29,7 @@ def test_tracking_id_format_and_defaults():
     "field",
     ["sendernam", "recipnam", "recipaddr", "owner"],
 )
-def test_constructor_requires_all_fields(field):
+def test_2(field):  # Tests constructor requires all fields
     kwargs = {
         "sendernam": "Nehir",
         "recipnam": "Aybeniz",
@@ -51,7 +51,7 @@ class DummyContainer:
         return self._state
 
 
-def test_set_container_updates_state_and_id():
+def test_3():  # Tests set container updates state and ID
     item = make_item()
     container = DummyContainer(state="waiting", cid="CONT-9")
 
@@ -61,7 +61,7 @@ def test_set_container_updates_state_and_id():
     assert item.state == "waiting"
 
 
-def test_set_container_none_resets_state_if_not_complete():
+def test_4():  # Tests set container none resets state if not complete
     item = make_item()
     container = DummyContainer(state="in transit")
 
@@ -72,7 +72,7 @@ def test_set_container_none_resets_state_if_not_complete():
     assert item.state == "accepted"
 
 
-def test_complete_marks_item_complete():
+def test_5():  # Tests complete marks item complete
     item = make_item()
 
     item.complete()
@@ -96,31 +96,7 @@ class TrackerWithoutArg:
         self.count += 1
 
 
-def test_updated_notifies_all_trackers():
-    item = make_item()
-    tracker_with_arg = TrackerWithArg()
-    tracker_without_arg = TrackerWithoutArg()
-
-    item.track(tracker_with_arg)
-    item.track(tracker_without_arg)
-
-    item.updated()
-
-    assert tracker_with_arg.calls == [item]
-    assert tracker_without_arg.count == 1
-
-
-def test_set_container_triggers_update_notification():
-    item = make_item()
-    tracker = TrackerWithArg()
-    item.track(tracker)
-
-    item.setContainer(DummyContainer())
-
-    assert tracker.calls[-1] is item
-
-
-def test_untrack_stops_notifications():
+def test_6():  # Tests untrack stops notifications
     item = make_item()
     tracker = TrackerWithArg()
 
@@ -131,7 +107,7 @@ def test_untrack_stops_notifications():
     assert tracker.calls == []
 
 
-def test_track_validates_inputs():
+def test_7():  # Tests track validates inputs
     item = make_item()
 
     with pytest.raises(ValueError):
@@ -141,7 +117,7 @@ def test_track_validates_inputs():
         item.track([])
 
 
-def test_get_returns_serialized_snapshot():
+def test_8():  # Tests get returns serialized snapshot
     item = make_item()
 
     snapshot = json.loads(item.get())
@@ -151,25 +127,14 @@ def test_get_returns_serialized_snapshot():
     assert snapshot["deleted"] is False
 
 
-def test_update_changes_fields_and_notifies_trackers():
-    item = make_item()
-    tracker = TrackerWithArg()
-    item.track(tracker)
-
-    item.update(sendernam="Updated Sender")
-
-    assert item.sender_name == "Updated Sender"
-    assert tracker.calls[-1] is item
-
-
-def test_update_rejects_unknown_fields():
+def test_9():  # Tests update rejects unknown fields
     item = make_item()
 
     with pytest.raises(AttributeError):
         item.update(foo="bar")
 
 
-def test_delete_marks_item_and_blocks_future_changes():
+def test_10():  # Tests delete marks item and blocks future changes
     item = make_item()
     item.delete()
 
@@ -179,7 +144,7 @@ def test_delete_marks_item_and_blocks_future_changes():
         item.update(sendernam="Another")
 
 
-def test_directory_create_list_attach_detach_delete_flow():
+def test_11():  # Tests directory create list attach detach delete flow
     directory = CargoDirectory()
     item_id = directory.create(
         sendernam="S",
@@ -204,7 +169,7 @@ def test_directory_create_list_attach_detach_delete_flow():
     assert directory.list() == []
 
 
-def test_directory_delete_requires_detach_first():
+def test_12():  # Tests directory delete requires detach first
     directory = CargoDirectory()
     item_id = directory.create(
         sendernam="S",

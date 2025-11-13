@@ -21,7 +21,7 @@ class CargoItem:
         "owner": "owner",
         "state": "state",
     }
-
+    ######### CRUD #############
     def __init__(
         self,
         sendernam: str,
@@ -63,39 +63,13 @@ class CargoItem:
             "deleted": self._deleted,
         }
         return json.dumps(payload, sort_keys=True)
-
-    def getid(self) -> str:
-        """Return the unique identifier allotted by the directory."""
-        return self._tracking_id
-
-    def trackingId(self) -> str:
-        return self._tracking_id
-
-    def getContainer(self) -> Optional[Any]:
-        return self._container_id
-
-    def setContainer(self, container: Any) -> None:
-        self._ensure_active()
-        self._container = container
-        self._container_id = self._resolve_container_id(container)
-
-        # attempt to align the item state with the container's declared state
-        if container is None:
-            if self.state != "complete":
-                self.state = "accepted"
-        else:
-            state = self._state_from_container(container)
-            if state:
-                self.state = state
-
-        self.updated()
-
+    
     def update(self, **updates: Any) -> None:
-        """Update mutable fields of the cargo item."""
         if not updates:
             return
 
-        self._ensure_active()
+        if self._deleted:
+            raise RuntimeError("Cargo item has been deleted")
 
         changed = False
         for key, value in updates.items():
@@ -113,30 +87,9 @@ class CargoItem:
         if changed:
             self.updated()
 
-    def updated(self) -> None:
-        for tracker in list(self._trackers):
-            self._notify_tracker(tracker)
 
-    def complete(self) -> None:
-        self._ensure_active()
-        self.state = "complete"
-        self.updated()
-
-    def track(self, tracker: Any) -> None:
-        self._ensure_active()
-        if tracker is None:
-            raise ValueError("tracker must not be None")
-        try:
-            self._trackers.add(tracker)
-        except TypeError as exc:
-            raise TypeError("tracker objects not hashable") from exc
-
-    def untrack(self, tracker: Any) -> None:
-        self._ensure_active()
-        self._trackers.discard(tracker)
 
     def delete(self) -> None:
-        """Mark the cargo item as deleted and notify trackers."""
         if self._deleted:
             return
         self._deleted = True
@@ -146,41 +99,72 @@ class CargoItem:
         self.updated()
         self._trackers.clear()
 
-    def _notify_tracker(self, tracker: Any) -> None:
-        try:
-            tracker.updated(self)
-        except TypeError:
-            tracker.updated()
+    def trackingId(self) -> str:
+        return self._tracking_id
 
-    @staticmethod
-    def _resolve_container_id(container: Any) -> Optional[Any]:
-        if container is None:
-            return None
+    def getContainer(self) -> Optional[Any]:
+        return self._container_id
 
-        if hasattr(container, "cid"):
-            return getattr(container, "cid")
-        if hasattr(container, "getid") and callable(container.getid):
-            return container.getid()
-        if hasattr(container, "trackingId") and callable(container.trackingId):
-            return container.trackingId()
-
-        return container
-
-    @staticmethod
-    def _state_from_container(container: Any) -> Optional[str]:
-        if hasattr(container, "getState") and callable(container.getState):
-            try:
-                state = container.getState()
-            except Exception:
-                return None
-            if isinstance(state, str) and state:
-                return state
-        return None
-
-    def _ensure_active(self) -> None:
+    def setContainer(self, container: Any) -> None:
         if self._deleted:
             raise RuntimeError("Cargo item has been deleted")
 
+        self._container = container
+        if container is None:
+            self._container_id = None
+        elif hasattr(container, "cid"):
+            self._container_id = getattr(container, "cid")
+        elif hasattr(container, "trackingId") and callable(container.trackingId):
+            self._container_id = container.trackingId()
+        else:
+            self._container_id = container
+
+        # attempt to align the item state with the container's declared state
+        if container is None:
+            if self.state != "complete":
+                self.state = "accepted"
+        else:
+            state = None
+            if hasattr(container, "getState") and callable(container.getState):
+                try:
+                    state = container.getState()
+                except Exception:
+                    pass
+            if isinstance(state, str) and state:
+                self.state = state
+
+        self.updated()
+
+    def updated(self) -> None:
+        for tracker in list(self._trackers):
+            try:
+                tracker.updated(self)
+            except TypeError:
+                tracker.updated()
+
+    def complete(self) -> None:
+        if self._deleted:
+            raise RuntimeError("Cargo item has been deleted")
+
+        self.state = "complete"
+        self.updated()
+
+    def track(self, tracker: Any) -> None:
+        if self._deleted:
+            raise RuntimeError("Cargo item has been deleted")
+
+        if tracker is None:
+            raise ValueError("tracker must not be None")
+        try:
+            self._trackers.add(tracker)
+        except TypeError as exc:
+            raise TypeError("tracker objects not hashable") from exc
+
+    def untrack(self, tracker: Any) -> None:
+        if self._deleted:
+            raise RuntimeError("Cargo item has been deleted")
+
+        self._trackers.discard(tracker)
 
 class CargoDirectory:
     """In-memory catalog for cargo items supporting CRUD operations."""
@@ -191,7 +175,7 @@ class CargoDirectory:
 
     def create(self, **kwargs: Any) -> str:
         item = CargoItem(**kwargs)
-        item_id = item.getid()
+        item_id = item.trackingId()
         if item_id in self._items:
             raise RuntimeError("Duplicate cargo item identifier generated")
         self._items[item_id] = item
@@ -201,7 +185,9 @@ class CargoDirectory:
         return [(item_id, item.get()) for item_id, item in self._items.items()]
 
     def listattached(self, user: str) -> List[Tuple[str, str]]:
-        self._ensure_valid_user(user)
+        if not isinstance(user, str) or not user.strip():
+            raise ValueError("user must be a non-empty string")
+
         result: List[Tuple[str, str]] = []
         for item_id, users in self._attachments.items():
             if user in users and item_id in self._items:
@@ -209,13 +195,17 @@ class CargoDirectory:
         return result
 
     def attach(self, item_id: str, user: str) -> CargoItem:
-        item = self._require_item(item_id)
-        self._ensure_valid_user(user)
+        if not isinstance(user, str) or not user.strip():
+            raise ValueError("user must be a non-empty string")
+
+        item = self._items[item_id]
         self._attachments.setdefault(item_id, set()).add(user)
         return item
 
     def detach(self, item_id: str, user: str) -> None:
-        self._ensure_valid_user(user)
+        if not isinstance(user, str) or not user.strip():
+            raise ValueError("user must be a non-empty string")
+
         if item_id not in self._items:
             raise KeyError(item_id)
         users = self._attachments.get(item_id)
@@ -226,20 +216,10 @@ class CargoDirectory:
             self._attachments.pop(item_id, None)
 
     def delete(self, item_id: str) -> None:
-        item = self._require_item(item_id)
+        item = self._items[item_id]
         attached = self._attachments.get(item_id)
         if attached:
             raise RuntimeError("Cannot delete an item while it is attached")
         item.delete()
         self._items.pop(item_id, None)
 
-    def _require_item(self, item_id: str) -> CargoItem:
-        try:
-            return self._items[item_id]
-        except KeyError as exc:
-            raise KeyError(f"Unknown item '{item_id}'") from exc
-
-    @staticmethod
-    def _ensure_valid_user(user: str) -> None:
-        if not isinstance(user, str) or not user.strip():
-            raise ValueError("user must be a non-empty string")
