@@ -194,6 +194,11 @@ class CargoDirectory:
                 result.append((item_id, self._items[item_id].get()))
         return result
 
+    def get(self, item_id: str) -> CargoItem:
+        if item_id not in self._items:
+            raise KeyError(item_id)
+        return self._items[item_id]
+
     def attach(self, item_id: str, user: str) -> CargoItem:
         if not isinstance(user, str) or not user.strip():
             raise ValueError("user must be a non-empty string")

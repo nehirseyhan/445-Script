@@ -49,15 +49,14 @@ saved to disk/database when the last user detaches from it. Each constructed
 object will be assigned a unique id by create(), and calling the getid(...)
 method on the object returns it.
 
-The project topics are chosen to contain instance notification scenarios. When
-an object is updated, all observers will get an immediate notification. In the
+When an object is updated, all observers will get an immediate notification. In the
 first phase, you can show this case with terminal output. In the second phase,
 all attached clients will be notified properly.
 
 Also, you do not need to implement any persistence in this phase. All objects
 are lost when the program stops.
 
-Project Topics (cargo-only copy)
+Project Topic
 
 4. Cargo Delivery and Tracking System
 CargoItem class
@@ -142,14 +141,3 @@ will cover all method calls you implement. You will show the result and imple-
 mentation of unit tests during the demo. You will use pytest module for unit
 tests. More information will be provided in the class.
 
-Policies
-Any kind of code sharing among the teams is not allowed. You will get zero from
-the phase involving cheating. During the demo, both team members will be
-asked detailed questions about the code. If you fail to answer the questions, we
-will assume the code is not your work and cut your points. You have to show
-that you have the full control of your code.
-
-Submission
-You will submit all your files in an archive file on odtuclass. The demonstrations
-will be scheduled in the following days where you need to demonstrate the
-submitted files, no further contribution allowed.
