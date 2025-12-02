@@ -331,7 +331,9 @@ def run_scenario_6_wait_events():
         watch_wait = [
             1.0, 
             "WATCH CI00000001", 
+            0.5,
             "WAIT_EVENTS", # This should hang here until Client B triggers it
+            2.5,
             "QUIT"
         ]
         

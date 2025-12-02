@@ -9,11 +9,13 @@ import os
 # import library classes
 from cargo_item import CargoDirectory, CargoItem
 from container import Container
+from tracker import Tracker
 
 # Shared model
 _model_lock = RLock()
 _directory = CargoDirectory()
 _containers = {}
+tracker_sequence = count(1)
 STATE_FILE = 'server_state.json'
 
 
@@ -115,43 +117,19 @@ def load_state(path=STATE_FILE):
         _containers = new_containers
 
 
-class SessionWatcher:
-    """Simple watcher object attached to items/containers that notifies a session."""
-
-    def __init__(self, session):
-        self.session = session
-
-    def updated(self, updated_object=None):
-        # produce a small brief message and notify the session
-        brief = {
-            'when': time.time(),
-            'obj': None,
-        }
-        if hasattr(updated_object, 'trackingId'):
-            brief['obj'] = ('cargo', updated_object.trackingId(), getattr(updated_object, 'state', None))
-        elif hasattr(updated_object, 'cid'):
-            brief['obj'] = ('container', updated_object.cid, getattr(updated_object, 'loc', None))
-        else:
-            brief['obj'] = ('generic', None, None)
-
-        # append to session queue and notify
-        with self.session.cond:
-            self.session._event_counter += 1
-            self.session.events.append(brief)
-            self.session.pending_events += 1
-            self.session.cond.notify_all()
-
-
 class Session(Thread):
     def __init__(self, sock):
         super().__init__()
         self.socket = sock
         self.cond = Condition()
         self.events = []
-        self.watcher = SessionWatcher(self)
-        self.tracked_items = []
-        self.tracked_containers = []
         self.username = 'guest'
+        self.tracker = Tracker(
+            tid=f"TRK{next(tracker_sequence):06d}",
+            description="session tracker",
+            owner=self.username,
+            on_update=self._on_tracker_update,
+        )
         self._running = True
         self._buffer = ''
         self.pending_events = 0
@@ -203,6 +181,10 @@ class Session(Thread):
             if len(args) != 1:
                 raise ValueError('Usage: USER <name>')
             self.username = args[0]
+            try:
+                self.tracker.update(owner=self.username)
+            except Exception:
+                pass
             return (f'OK hello {self.username}', True)
         if cmd == 'CREATE_ITEM':
             if len(args) < 4:
@@ -236,8 +218,7 @@ class Session(Thread):
                 item = _directory._items.get(item_id)
                 if item is None:
                     raise KeyError('Unknown item')
-                item.track(self.watcher)
-                self.tracked_items.append(item)
+                self.tracker.addItem([item])
             return (f'OK watching {item_id}', True)
         if cmd == 'WATCH_CONTAINER':
             if len(args) != 1:
@@ -247,8 +228,7 @@ class Session(Thread):
                 cont = _containers.get(cid)
                 if cont is None:
                     raise KeyError('Unknown container')
-                cont.track(self.watcher)
-                self.tracked_containers.append(cont)
+                self.tracker.addContainer([cont])
             return (f'OK watching container {cid}', True)
         if cmd == 'LOAD':
             if len(args) != 2:
@@ -337,19 +317,31 @@ class Session(Thread):
             return ('OK bye', False)
         raise ValueError('Unknown command')
 
+    def _on_tracker_update(self, tracker_obj, updated_object, obj_id):
+        brief = {
+            'when': time.time(),
+            'obj': ('generic', None, None),
+        }
+        if isinstance(updated_object, CargoItem):
+            brief['obj'] = ('cargo', obj_id, getattr(updated_object, 'state', None))
+        elif isinstance(updated_object, Container):
+            brief['obj'] = ('container', obj_id, getattr(updated_object, 'loc', None))
+        elif isinstance(updated_object, Tracker):
+            brief['obj'] = ('tracker', tracker_obj.tid, None)
+
+        with self.cond:
+            self._event_counter += 1
+            self.events.append(brief)
+            self.pending_events += 1
+            self.cond.notify_all()
+
     def close(self):
         # unregister watchers
         with _model_lock:
-            for it in list(self.tracked_items):
-                try:
-                    it.untrack(self.watcher)
-                except Exception:
-                    pass
-            for ct in list(self.tracked_containers):
-                try:
-                    ct.untrack(self.watcher)
-                except Exception:
-                    pass
+            try:
+                self.tracker.delete()
+            except Exception:
+                pass
         try:
             self.socket.close()
         except Exception:

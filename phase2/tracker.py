@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import json
-from typing import Any, Dict, List, Optional, Set, Tuple
+from typing import Any, Callable, Dict, List, Optional, Set, Tuple
 
 from cargo_item import CargoItem
 from container import Container
@@ -19,7 +19,13 @@ class Tracker:
         "owner": "owner",
     }
  ######### CRUD #############
-    def __init__(self, tid: str, description: str, owner: str) -> None:
+    def __init__(
+        self,
+        tid: str,
+        description: str,
+        owner: str,
+        on_update: Optional[Callable[["Tracker", Optional[Any], str], None]] = None,
+    ) -> None:
 
         if not tid:
             raise ValueError("tid not provided")
@@ -36,6 +42,7 @@ class Tracker:
         self._containers: Set[Container] = set()
         self._view_rect: Optional[Tuple[float, float, float, float]] = None
         self._deleted = False
+        self._on_update = on_update
 
     def get(self) -> str:
         """Return a JSON representation of the tracker."""
@@ -143,6 +150,7 @@ class Tracker:
 
         # Per project spec, phase 1 just prints to terminal
         print(f"Tracker {self.tid}: Received update from {obj_id}.")
+        self._emit_update(updated_object, obj_id)
 
     def getStatlist(self) -> List[Dict[str, Any]]:
         """
@@ -201,4 +209,12 @@ class Tracker:
             )
         except (ValueError, TypeError) as exc:
             raise ValueError("Invalid view coordinates") from exc
+
+    def _emit_update(self, updated_object: Optional[Any], obj_id: str) -> None:
+        if not self._on_update:
+            return
+        try:
+            self._on_update(self, updated_object, obj_id)
+        except Exception as exc:
+            print(f"Tracker {self.tid}: update callback failed: {exc}")
 
