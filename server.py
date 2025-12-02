@@ -136,6 +136,7 @@ class SessionWatcher:
 
         # append to session queue and notify
         with self.session.cond:
+            self.session._event_counter += 1
             self.session.events.append(brief)
             self.session.pending_events += 1
             self.session.cond.notify_all()
@@ -154,6 +155,7 @@ class Session(Thread):
         self._running = True
         self._buffer = ''
         self.pending_events = 0
+        self._event_counter = 0
 
     def run(self):
         # start notification agent
@@ -318,13 +320,15 @@ class Session(Thread):
             timeout = 5.0
             end = time.time() + timeout
             with self.cond:
-                while self.pending_events > 0 and self._running:
+                start_counter = self._event_counter
+                while self._event_counter == start_counter and self._running:
                     remaining = end - time.time()
                     if remaining <= 0:
                         break
                     self.cond.wait(timeout=remaining)
-            if self.pending_events > 0:
-                raise RuntimeError('Timed out waiting for events')
+                event_observed = self._event_counter != start_counter
+            if event_observed:
+                return ('OK event available', True)
             return ('OK no pending events', True)
         if cmd == 'SAVE':
             save_state()
