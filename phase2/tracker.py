@@ -129,24 +129,11 @@ class Tracker:
 
         # If a view rectangle is set, filter updates based on location
         if self._view_rect:
-            loc = None
-            if isinstance(updated_object, Container):
-                loc = updated_object.loc
-            elif isinstance(updated_object, CargoItem):
-                if hasattr(updated_object, "_container") and updated_object._container:
-                    container_obj = updated_object._container
-                    if hasattr(container_obj, "loc"):
-                        loc = container_obj.loc
-            if loc:
-                top, left, bottom, right = self._view_rect
-                lon, lat = loc
-                if not (left <= lon <= right and bottom <= lat <= top):
-                    # Ignore updates from objects outside the view
-                    print(f"Tracker {self.tid}: Ignoring update from {obj_id} (outside view).")
-                    return
-            else:
-                # Object has no location, process update
-                pass
+            loc = self._resolve_location(updated_object)
+            if loc is not None and not self._loc_in_view(loc):
+                # Ignore updates from objects outside the view
+                print(f"Tracker {self.tid}: Ignoring update from {obj_id} (outside view).")
+                return
 
         # Per project spec, phase 1 just prints to terminal
         print(f"Tracker {self.tid}: Received update from {obj_id}.")
@@ -170,14 +157,11 @@ class Tracker:
 
             # Apply view filter if it exists
             if self._view_rect:
-                if loc:
-                    top, left, bottom, right = self._view_rect
-                    lon, lat = loc
-                    if not (left <= lon <= right and bottom <= lat <= top):
-                        continue  # Skip item, outside view
-                else:
+                if loc is None:
                     # Item has no location, skip if view is set
                     continue
+                if not self._loc_in_view(loc):
+                    continue  # Skip item, outside view
 
             status_record = {
                 "id": item.trackingId(),
@@ -209,6 +193,33 @@ class Tracker:
             )
         except (ValueError, TypeError) as exc:
             raise ValueError("Invalid view coordinates") from exc
+
+    def inView(self, obj: Any) -> bool:
+        """Return True if the object's location falls within the current view."""
+        if self._view_rect is None:
+            return True
+        loc = self._resolve_location(obj)
+        if loc is None:
+            return False
+        return self._loc_in_view(loc)
+
+    def _resolve_location(self, obj: Optional[Any]) -> Optional[Tuple[float, float]]:
+        if obj is None:
+            return None
+        if isinstance(obj, Container):
+            return getattr(obj, "loc", None)
+        if isinstance(obj, CargoItem):
+            container_obj = getattr(obj, "_container", None)
+            if container_obj is not None and hasattr(container_obj, "loc"):
+                return container_obj.loc
+        return None
+
+    def _loc_in_view(self, loc: Tuple[float, float]) -> bool:
+        if self._view_rect is None:
+            return True
+        top, left, bottom, right = self._view_rect
+        lon, lat = loc
+        return left <= lon <= right and bottom <= lat <= top
 
     def _emit_update(self, updated_object: Optional[Any], obj_id: str) -> None:
         if not self._on_update:

@@ -449,6 +449,42 @@ def run_scenario_8_disconnection():
     finally:
         stop_server(server)
 
+def run_scenario_9_view_filtering():
+    # 9. Tracker view filtering demonstrates view rejections and updates
+    print(f"\n{'='*60}\nSCENARIO 9: Tracker View Filtering\n{'='*60}")
+
+    server = start_server()
+    try:
+        setup = [
+            "CREATE_CONTAINER VIEW_CONT Truck Truck 25 25",
+            2.0,
+            "SETLOC VIEW_CONT 0 0",   # move into widened view
+            2.0,
+            "QUIT"
+        ]
+
+        viewer = [
+            1.0,
+            "SETVIEW 10 -10 -10 10",          # tight view around origin
+            "WATCH_CONTAINER VIEW_CONT",       # expect ERR ... out of view
+            1.0,
+            "SETVIEW 40 -40 -40 40",          # expand to include container
+            "WATCH_CONTAINER VIEW_CONT",       # now succeeds
+            0.5,
+            "WAIT_EVENTS",                     # waits for move into view
+            0.5,
+            "QUIT"
+        ]
+
+        clients = [
+            DemoClient("Updater", "UPDATER", setup),
+            DemoClient("Viewer", "WATCH_A", viewer),
+        ]
+        for c in clients: c.start()
+        for c in clients: c.join()
+    finally:
+        stop_server(server)
+
 def main():
     run_scenario_1_concurrency()
     run_scenario_2_item_watchers()
@@ -458,6 +494,7 @@ def main():
     run_scenario_6_wait_events()
     run_scenario_7_poll_vs_push()
     run_scenario_8_disconnection()
+    run_scenario_9_view_filtering()
 
 if __name__ == "__main__":
     main()

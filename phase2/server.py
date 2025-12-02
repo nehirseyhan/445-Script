@@ -176,7 +176,7 @@ class Session(Thread):
         args = parts[1:]
 
         if cmd == 'HELP':
-            return ('Commands: HELP, USER <name>, CREATE_ITEM <s> <r> <a> <owner>, CREATE_CONTAINER <cid> <desc> <type> <lon> <lat>, LIST_ITEMS, LIST_CONTAINERS, WATCH <item>, WATCH_CONTAINER <cid>, LOAD <item> <cid>, UNLOAD <item>, COMPLETE <item>, SETLOC <cid> <lon> <lat>, STATUS <item>, WAIT_EVENTS, SAVE, QUIT', True)
+            return ('Commands: HELP, USER <name>, CREATE_ITEM <s> <r> <a> <owner>, CREATE_CONTAINER <cid> <desc> <type> <lon> <lat>, LIST_ITEMS, LIST_CONTAINERS, WATCH <item>, WATCH_CONTAINER <cid>, LOAD <item> <cid>, UNLOAD <item>, COMPLETE <item>, SETLOC <cid> <lon> <lat>, SETVIEW <top> <left> <bottom> <right>, STATUS <item>, WAIT_EVENTS, SAVE, QUIT', True)
         if cmd == 'USER':
             if len(args) != 1:
                 raise ValueError('Usage: USER <name>')
@@ -228,6 +228,8 @@ class Session(Thread):
                 cont = _containers.get(cid)
                 if cont is None:
                     raise KeyError('Unknown container')
+                if not self.tracker.inView(cont):
+                    return (f'ERR container {cid} out of view', True)
                 self.tracker.addContainer([cont])
             return (f'OK watching container {cid}', True)
         if cmd == 'LOAD':
@@ -256,6 +258,15 @@ class Session(Thread):
                     raise KeyError('Unknown container')
                 cont.setlocation(float(args[1]), float(args[2]))
             return (f'OK moved {cid}', True)
+        if cmd == 'SETVIEW':
+            if len(args) != 4:
+                raise ValueError('Usage: SETVIEW <top> <left> <bottom> <right>')
+            try:
+                top, left, bottom, right = map(float, args)
+            except ValueError as exc:
+                raise ValueError('Usage: SETVIEW <top> <left> <bottom> <right>') from exc
+            self.tracker.setView(top, left, bottom, right)
+            return ('OK view set', True)
         if cmd == 'UNLOAD':
             if len(args) != 1:
                 raise ValueError('Usage: UNLOAD <item_id>')

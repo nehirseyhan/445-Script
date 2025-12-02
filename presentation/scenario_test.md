@@ -213,9 +213,9 @@ Goal: Ensure WAIT_EVENTS blocks until an event is generated or the timeout lapse
 
 What happens:
 - Waiter watches CI00000001 and issues WAIT_EVENTS; Trigger later completes the item.
-- Because the script immediately queues QUIT after WAIT_EVENTS, the session closes before the completion arrives, so the transcript shows no response line for the wait.
+- Because the current demo script immediately queues QUIT after WAIT_EVENTS, the session may close before the completion arrives, so in the transcript we might not see the server’s reply.
 
-Interpretation: With the new server logic, WAIT_EVENTS holds the connection open until a fresh event increments the session counter. To observe the `OK event available` reply, keep the client connected (e.g., add a sleep after WAIT_EVENTS) so the completion arrives before QUIT.
+Interpretation: The server tracks an internal event counter per session; WAIT_EVENTS sleeps on a condition variable until the counter changes or a timeout is reached, then responds with either `OK event available` or `OK no pending events`. To see `OK event available` reliably in the demo, we would keep the client alive slightly longer after WAIT_EVENTS (for example, add a short sleep before sending QUIT).
 
 ============================================================
 SCENARIO 7: Polling vs. Pushing

@@ -1,6 +1,6 @@
 # Cargo Tracking System – Short Speech Notes
 
-Use this as a 10–15 minute, high‑level script. It focuses on key points and scenario evidence rather than every code detail.
+Use this as a 10–15 minute, high‑level script. It focuses on key points and scenario evidence rather than every code detail, and matches the current code in `cargo_item.py`, `container.py`, `tracker.py` and `server.py`.
 
 ---
 
@@ -16,7 +16,7 @@ We built a small cargo tracking platform where clients create items and containe
   - Represents a single package: sender, recipient, address, owner.
   - Has a unique tracking id like `CI00000001` and a state: `accepted`, `waiting`, `in transit`, `complete`, `deleted`.
   - Knows which container it is in, and which watchers are subscribed.
-  - When its state or container changes, it calls `updated()` and notifies all watchers.
+  - When its state or container changes, it calls `updated()` and notifies all trackers that subscribed to this item.
 
 - **Container** (in `container.py`)
   - Represents a location or vehicle: `cid`, description, type (`FrontOffice`, `Hub`, `Truck`, ...), and `(lon, lat)`.
@@ -28,9 +28,9 @@ We built a small cargo tracking platform where clients create items and containe
   - `setlocation()` changes its position, notifies container watchers and then pings every item inside so item watchers also see movement.
 
 - **Tracker** (in `tracker.py`)
-  - Phase‑1, in‑process observer: watches sets of items and containers.
+  - Reusable observer: watches sets of items and containers and exposes an `updated(updated_object)` callback.
   - Has optional geographic view rectangle to filter updates.
-  - For this assignment it mainly prints which id changed and what it sees.
+  - Can be constructed with an `on_update` callback; the server uses this to turn domain updates into network events.
 
 - **CargoDirectory**
   - In‑memory registry of all items: create, list, get, delete.
@@ -44,13 +44,13 @@ We built a small cargo tracking platform where clients create items and containe
   - `_directory: CargoDirectory` and `_containers: dict[cid → Container]` hold the world.
   - `_model_lock` (RLock) wraps all reads/writes so multiple client threads cannot corrupt the shared model.
 
-- **Sessions and watchers**
+- **Sessions and trackers**
   - Each TCP connection becomes a `Session` thread.
-  - Each session owns a `SessionWatcher` object registered on items/containers via `WATCH` and `WATCH_CONTAINER`.
-  - When `CargoItem.updated()` or `Container.updated()` is called, they invoke `SessionWatcher.updated(updated_object)`.
+  - Each session owns a `Tracker` instance whose `on_update` callback is bound to the session method `_on_tracker_update`.
+  - When `CargoItem.updated()` or `Container.updated()` is called, they invoke `Tracker.updated(updated_object)`, which in turn triggers the callback to queue an event for that session.
 
 - **Event pipeline**
-  - `SessionWatcher.updated` builds a tiny event dict: kind (cargo/container), id, and key value (state or location), and appends it into `session.events`.
+  - The tracker’s `updated()` method calls the session’s `_on_tracker_update`, which builds a tiny event dict: kind (cargo/container), id, and key value (state or location), and appends it into `session.events`.
   - A per‑session `notificationagent` thread waits on a `Condition`, pops events, and sends lines like `EVENT {json}` to the client.
   - This makes notifications asynchronous: commands don’t block on slow sockets—events are buffered and streamed out.
 
