@@ -181,7 +181,7 @@ File: `tracker.py`
 ### 4.1 Responsibilities
 - A `Tracker` object is a *logical observer* that watches multiple items and containers.
 - This is different from network sessions: `Tracker` is an **in‑process** watcher used in phase 1.
-- In phase 2, the same pattern is reused by `SessionWatcher` on the server side.
+- In phase 2, the same pattern is reused by a session‑level `Tracker` instance on the server side.
 
 ### 4.2 Internal state
 - Identity: `tid`, `description`, `owner`.
@@ -203,11 +203,12 @@ File: `tracker.py`
 
 ### 4.4 Notifications: `updated(updated_object)`
 - This method is called by items and containers when they change.
-- For the homework’s current phase, it simply **prints to the terminal**:
+- For the homework’s phase‑1 usage, it prints to the terminal:
   - It identifies the updated object’s id (item tracking id or container id).
-  - If a view rectangle is set, and the object has a location (container or item-in-container), it checks whether the location falls inside the rectangle.
-    - If outside, it prints that the update is ignored.
+  - If a view rectangle is set, and the object has a location (container or item‑in‑container), it checks whether the location falls inside the rectangle.
+  - If outside, it prints that the update is ignored.
   - Otherwise, prints a message like: “Tracker T1: Received update from CI00000002”.
+ - In phase‑2 (the server), `Tracker` instances are typically constructed with an `on_update` callback; in that case `updated()` also forwards the event to the callback so the server can enqueue a network event for the session (the code calls the callback after printing).
 
 ### 4.5 Reports: `getStatlist()`
 - Returns a list of summary dicts for currently tracked items.
@@ -257,11 +258,11 @@ Command → model operation mapping (high level):
   - Calls `cont.get()` for each container and returns the JSON list.
 
 - `WATCH <item_id>`
-  - Looks up the `CargoItem` and calls `item.track(session.watcher)`.
+  - Looks up the `CargoItem` and calls `item.track(session.tracker)`.
   - From now on, any call to `item.updated()` will enqueue an event in this session.
 
 - `WATCH_CONTAINER <cid>`
-  - Looks up the `Container` and calls `cont.track(session.watcher)`.
+  - Looks up the `Container` and calls `cont.track(session.tracker)`.
 
 - `LOAD <item_id> <cid>`
   - Looks up the item and container.
@@ -305,7 +306,7 @@ Each TCP client connection is managed by a `Session` thread.
   - `username` – name set by the `USER` command.
   - `tracked_items` / `tracked_containers` – which domain objects this network session is watching.
   - `_buffer` – accumulation of incoming bytes until a newline.
-  - An associated `SessionWatcher` instance for event notifications.
+  - An associated `Tracker` instance (`self.tracker`) for event notifications.
   - `cond`, `events`, `pending_events`, `_event_counter` – used to coordinate between the command handler and the asynchronous notification agent.
 
 - **Receiving commands** (`run()` method)
@@ -389,11 +390,11 @@ We can present it as a mini‑API:
   - `QUIT`
     - Returns `OK bye` and signals that this session should stop.
 
-### 5.6 Event pipeline: `SessionWatcher` and `notificationagent`
+### 5.6 Event pipeline: session `Tracker` and `notificationagent`
 
-- **`SessionWatcher`**
-  - A small adapter object passed into items and containers as their watcher.
-  - Its `updated(updated_object)` method:
+- **Session `Tracker`**
+  - The server constructs a `Tracker` instance per session and passes it into items and containers as their watcher.
+  - The tracker's `updated(updated_object)` method:
     - Builds a concise event dict: timestamp + a tuple describing the object.
       - For cargo items: `( "cargo", trackingId, state )`.
       - For containers: `( "container", cid, loc )`.
@@ -520,7 +521,7 @@ When presenting, we don’t need to run all scenarios live; we can explain what 
    - One client watches an item, then abruptly closes its socket (simulating a crash or network failure).
    - Another client continues to complete items.
    - Demonstrates:
-     - Server’s `Session` and `SessionWatcher` logic tolerate disappearing clients.
+    - Server’s `Session` and per‑session `Tracker` logic tolerate disappearing clients.
      - `close()` unregisters watchers and the system continues functioning.
 
 ---
@@ -545,8 +546,8 @@ When presenting, we don’t need to run all scenarios live; we can explain what 
 
 3. **Explain the watcher / event mechanism** on top of that:
    - When item or container changes, they call their `updated()` methods.
-   - For trackers (`Tracker` or `SessionWatcher`), `updated()` becomes a callback.
-   - On the server, `SessionWatcher` packages these into `EVENT` messages.
+  - For trackers (the in‑process `Tracker` or the session's tracker), `updated()` becomes a callback.
+  - On the server, the session's `Tracker` callback packages these into `EVENT` messages.
 
 4. **Point out concurrency and safety**:
    - Each client connection is a thread (`Session`).

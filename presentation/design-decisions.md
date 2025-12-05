@@ -137,7 +137,7 @@ This document explains **why** the important design decisions in `cargo_item.py`
   - Putting events into a queue is quick; then a dedicated thread (`notificationagent`) actually sends them.
 - **Why a condition variable:**
   - When there are no events, the notification thread waits on `cond` instead of busy‑looping (spinning and wasting CPU).
-  - When `SessionWatcher` adds an event, it signals the condition, waking the notifier.
+  - When the session tracker callback adds an event, it signals the condition, waking the notifier.
 
 ### 4.4 `notificationagent(session)` thread
 - **What:** A thread per session that sends `EVENT` lines.
@@ -225,7 +225,7 @@ Some specific choices:
 ### 4.7 `Session.close()` design
 - **Why unregister watchers here:**
   - Items and containers hold references to trackers.
-  - If a session died but stayed registered, any `updated()` on those objects would try to notify an invalid `SessionWatcher` → errors or memory leaks.
+  - If a session died but stayed registered, any `updated()` on those objects would try to notify an invalid session tracker → errors or memory leaks.
   - `close()` iterates over `tracked_items` and `tracked_containers` and calls `untrack(self.watcher)` in a best‑effort way.
 - **Why put socket close inside `try/except`:**
   - The socket might already be closed; we don’t want cleanup to raise new exceptions.

@@ -31,6 +31,7 @@ We built a small cargo tracking platform where clients create items and containe
   - Reusable observer: watches sets of items and containers and exposes an `updated(updated_object)` callback.
   - Has optional geographic view rectangle to filter updates.
   - Can be constructed with an `on_update` callback; the server uses this to turn domain updates into network events.
+  - When an `on_update` callback is provided, `updated()` forwards the event to that callback (in addition to printing). The server relies on this to enqueue session events asynchronously.
 
 - **CargoDirectory**
   - In‑memory registry of all items: create, list, get, delete.
