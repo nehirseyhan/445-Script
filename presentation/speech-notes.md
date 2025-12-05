@@ -30,12 +30,12 @@ We built a small cargo tracking platform where clients create items and containe
 - **Tracker** (in `tracker.py`)
   - Reusable observer: watches sets of items and containers and exposes an `updated(updated_object)` callback.
   - Has optional geographic view rectangle to filter updates.
-  - Can be constructed with an `on_update` callback; the server uses this to turn domain updates into network events.
-  - When an `on_update` callback is provided, `updated()` forwards the event to that callback (in addition to printing). The server relies on this to enqueue session events asynchronously.
+  - IMPORTANT! Can be constructed with an `on_update` callback; the server uses this to turn domain updates into network events.
+  - IMPORTANT! When an `on_update` callback is provided, `updated()` forwards the event to that callback (in addition to printing). The server relies on this to enqueue session events asynchronously.
 
 - **CargoDirectory**
   - In‑memory registry of all items: create, list, get, delete.
-  - Used by the server as the authoritative catalog for cargo.
+  - IMPORTANT! Used by the server as the authoritative catalog for cargo.
 
 ---
 
@@ -45,10 +45,14 @@ We built a small cargo tracking platform where clients create items and containe
   - `_directory: CargoDirectory` and `_containers: dict[cid → Container]` hold the world.
   - `_model_lock` (RLock) wraps all reads/writes so multiple client threads cannot corrupt the shared model.
 
-- **Sessions and trackers**
+- **IMPORTANT! Sessions and trackers**
   - Each TCP connection becomes a `Session` thread.
   - Each session owns a `Tracker` instance whose `on_update` callback is bound to the session method `_on_tracker_update`.
   - When `CargoItem.updated()` or `Container.updated()` is called, they invoke `Tracker.updated(updated_object)`, which in turn triggers the callback to queue an event for that session.
+
+  When a Session is created (server.py: Session.__init__), it builds a Tracker with:
+on_update=self._on_tracker_update.
+That means every time Tracker._emit_update runs, it invokes Session._on_tracker_update(session_tracker, updated_object, obj_id).
 
 - **Event pipeline**
   - The tracker’s `updated()` method calls the session’s `_on_tracker_update`, which builds a tiny event dict: kind (cargo/container), id, and key value (state or location), and appends it into `session.events`.
@@ -109,7 +113,7 @@ Use these as evidence points when answering "does it really work?".
    - Log shows the same item JSON (state `accepted`) loaded from `server_state.json`.
    - Proves: state is correctly serialized and reconstructed across server restarts.
 
-6. **Scenario 6 – Synchronous Waiting (`WAIT_EVENTS`)**
+6. **IMPORTANT! Scenario 6 – Synchronous Waiting (`WAIT_EVENTS`)**
    - `Waiter` does `WATCH` then `WAIT_EVENTS`; `Trigger` completes the item later.
    - With the current script, `WAIT_EVENTS` is immediately followed by `QUIT`, so we don’t see the `OK event available` line in the transcript.
    - But the server logic increments an event counter and wakes waiters as soon as a completion event is queued; adding a small delay after `WAIT_EVENTS` makes the reply visible.
